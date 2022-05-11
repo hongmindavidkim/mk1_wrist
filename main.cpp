@@ -42,6 +42,14 @@ uint16_t multiGoalCurrent[] = {1193,1193,1193,1193};
 uint32_t* tempPos1 = ActuatorTransformation(PI/4, -PI/4, -PI/4, PI/4);
 uint32_t* tempPos2 = ActuatorTransformation(PI/4, PI/4, PI/4, -PI/4);
 
+uint32_t* goalPos1 = ActuatorTransformation(0, 0, 0, PI/4);
+uint32_t* goalPos2 = ActuatorTransformation(0, 0, 0, -PI/4);
+uint32_t* goalPos3 = ActuatorTransformation(0, 0, PI/4, 0);
+uint32_t* goalPos4 = ActuatorTransformation(0, 0, -PI/4, 0);
+uint32_t* goalPos5 = ActuatorTransformation(0, PI/4, 0, 0);
+uint32_t* goalPos6 = ActuatorTransformation(0, -PI/4, 0, 0);
+uint32_t* goalPos7 = ActuatorTransformation(PI/4, 0, 0, 0);
+uint32_t* goalPos8 = ActuatorTransformation(-PI/4, 0, 0, 0);
 // ToF sensor i2c busses
 /**
 I2C i2c1(PF_0, PF_1); //(PB_9, PB_8); // SDA, SCL
@@ -95,18 +103,38 @@ int main() {
     }
     for (int i=0; i<idLength; i++) {
         dxl_bus.SetVelocityProfile(dxl_ID[i], 414); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
-        dxl_bus.SetAccelerationProfile(dxl_ID[i], 80); // 17166 rev/min^2
+        dxl_bus.SetAccelerationProfile(dxl_ID[i], 100); // 80(17166) rev/min^2
     }
     dxl_bus.SetMultGoalPositions(dxl_ID, idLength, multiHomePos); 
     wait_ms(2000);
     // On every received message, run dynamixel control loop...eventually move this to an interrupt on received message
     while (true) {
-        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, tempPos1);
-        pc.printf("%d, %d, %d, %d\n\r", tempPos1[0], tempPos1[1], tempPos1[2], tempPos1[3]);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos1);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos1[0], goalPos1[1], goalPos1[2], goalPos1[3]);
         wait_ms(500);
-        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, tempPos2);
-        pc.printf("%d, %d, %d, %d\n\r", tempPos2[0], tempPos2[1], tempPos2[2], tempPos2[3]);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos2);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos2[0], goalPos2[1], goalPos2[2], goalPos2[3]);
         wait_ms(500);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos3);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos3[0], goalPos3[1], goalPos3[2], goalPos3[3]);
+        wait_ms(500);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos4);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos4[0], goalPos4[1], goalPos4[2], goalPos4[3]);
+        wait_ms(500);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos5);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos5[0], goalPos5[1], goalPos5[2], goalPos5[3]);
+        wait_ms(500);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos6);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos6[0], goalPos6[1], goalPos6[2], goalPos6[3]);
+        wait_ms(500);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos7);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos7[0], goalPos7[1], goalPos7[2], goalPos7[3]);
+        wait_ms(500);
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos8);
+        pc.printf("%d, %d, %d, %d\n\r", goalPos8[0], goalPos8[1], goalPos8[2], goalPos8[3]);
+        wait_ms(500);
+
+
         /**
         wait_us(10);
         range[0] = tof1.readRangeResult();

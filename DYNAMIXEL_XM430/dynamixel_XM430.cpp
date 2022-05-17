@@ -137,7 +137,7 @@ void XM430_bus::getRPacket()
     float timeOut = return_delay + (12.0 * (float) ((float) rPacketLength) / ((float) baudrate)); //12 = 10 (start + 8 bits + stop) + 2 (gives a bit more time)
     //pc.printf("timeout: %f\n\r",timeOut);
     
-    wait_us(100); // same as delay in sendIPacket(); // Changed to 100us from 15us by David
+    wait_us(15); // same as delay in sendIPacket(); // Changed to 100us from 15us by David
     Timer tr;
     tr.start();
     while((i < rPacketLength)){ // && (tr.read() <= timeOut*2.0)) {

@@ -15,4 +15,4 @@
 
 #define PULLEY_DEPENDENCY_32 -1*(548.0f/1388.0f)
 
-uint32_t* ActuatorTransformation(float mcp, float pip, float dip, float mcr);
+void ActuatorTransformation(uint32_t (&transform)[4], float mcp, float pip, float dip, float mcr);

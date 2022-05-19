@@ -1,7 +1,7 @@
 #include <float.h>
 #include <cstdint>
 
-#define PI 3.1415926535
+#define PI 3.1415926535f
 #define rad2pulse(x) float(x) * (4096.0f/(2*PI)) + 2048 // 0 rad = 2048 = upright pos // Motor -> CW - , CCW + // -pi < x < pi
 #define radconv(x) float(x) * (4096.0f/(2*PI))
 #define PULLEY_RATIO_1 (1638.0f/1598.0f) // MPP to MPR (M4/M1)

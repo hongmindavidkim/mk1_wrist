@@ -3,6 +3,7 @@
 #include "string.h"
 #include "dynamixel_XM430.h"
 #include "math.h"
+#include <cmath>
 #include <cstdint>
 #include "actuator_transformation.h"
 
@@ -21,8 +22,8 @@ volatile uint8_t waitForReceive = 0;
 volatile uint8_t nextReload = 15;
 uint8_t rx_buffer[LEN];
 
-uint8_t dxl_ID[] =  {1,2,3,4};
-int8_t idLength = sizeof(dxl_ID) / sizeof(uint8_t);
+uint8_t dxl_ID[] =  {1};
+uint8_t idLength = sizeof(dxl_ID) / sizeof(dxl_ID[0]);
 
 // Debugging LEDs
 DigitalOut led_pwr(LED1);
@@ -36,16 +37,42 @@ int loop_time;
 
 // Initial Positions
 
-uint32_t multiHomePos[4];
-uint16_t multiGoalCurrent[] = {1193,1193,1193,1193};
+// uint32_t multiHomePos[4];
+// uint16_t multiGoalCurrent[] = {1193,1193,1193,1193};
+
+
 
 //uint32_t* tempPos1 = ActuatorTransformation(PI/4, -PI/4, -PI/4, PI/4);
 //uint32_t* tempPos2 = ActuatorTransformation(PI/4, PI/4, PI/4, -PI/4);
 
-uint32_t tempPos1[4];
-int32_t tempCPos1[4];
-uint32_t tempPos2[4];
-int32_t tempCPos2[4];
+double goalPosC = 2560;
+float currentPos;
+float currentVel;
+float currentCur;
+
+// float Kp = 0.3f;
+// float Kd = 0.01f;
+// float Kj = 0.0f;
+double Kp = 0;//0.063;
+double Kd = 0.001;//0.079;
+double Kj = 0;
+
+float Kt = 2.0f * (3.7f / 2.7f);
+float pulse_to_rad = (2.0f*PI)/4096.0f; // = 0.001534
+float rpm_to_rads = (0.229f*2.0f*PI)/60.0f; // = 0.0239
+//float desired_current;
+double desired_current;
+double current_limit = 1000;
+
+uint32_t dxl_position;
+uint32_t dxl_velocity;
+uint16_t dxl_current;
+
+int16_t current_command;
+// uint32_t tempPos1[4];
+// int32_t tempCPos1[4];
+// uint32_t tempPos2[4];
+// int32_t tempCPos2[4];
 
 // uint32_t* goalPos1 = ActuatorTransformation(0, 0, 0, PI/4);
 // uint32_t* goalPos2 = ActuatorTransformation(0, 0, 0, -PI/4);
@@ -69,9 +96,9 @@ uint16_t range_period = 30;
 
 // Main loop, receiving commands as fast as possible, then writing to a dynamixel
 int main() {
-    ActuatorTransformation(multiHomePos, 0, 0, 0, 0);
-    ActuatorTransformation(tempPos1, 0, 0, 0, PI/4);
-    ActuatorTransformation(tempPos2, 0, 0, 0, -PI/4);
+    // ActuatorTransformation(multiHomePos, 0, 0, 0, 0);
+    // ActuatorTransformation(tempPos1, 0, 0, 0, PI/4);
+    // ActuatorTransformation(tempPos2, 0, 0, 0, -PI/4);
     /**
     // ToF Setup
     i2c1.frequency(400000);
@@ -87,12 +114,12 @@ int main() {
     wait_us(1000);
     **/
 
-    // Set up dynamixel
-    // wait_ms(300);
+    //Set up dynamixel
+    wait_ms(300);
     // RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
     // RTS.mode(OpenDrainNoPull);
     // RTS.output();
-    // uart.baud(4000000);
+    // // uart.baud(4000000);
     // RTS = 0;
     // wait_ms(500);
     
@@ -100,20 +127,21 @@ int main() {
 
     for (int i=0; i<idLength; i++) {
         dxl_bus.SetTorqueEn(dxl_ID[i],0x00);    
-        dxl_bus.SetRetDelTime(dxl_ID[i],0x32); 
-        dxl_bus.SetControlMode(dxl_ID[i], POSITION_CONTROL);
+        dxl_bus.SetRetDelTime(dxl_ID[i],0x05); 
+        dxl_bus.SetControlMode(dxl_ID[i], CURRENT_CONTROL);
         wait_ms(100);    
         dxl_bus.TurnOnLED(dxl_ID[i], 0x01);
         //dxl_bus.TurnOnLED(dxl_ID[i], 0x00); // turn off LED
-        dxl_bus.SetTorqueEn(dxl_ID[i],0x01); 
+        dxl_bus.SetTorqueEn(dxl_ID[i],0x01);
+        dxl_bus.SetCurrentLimit(dxl_ID[i], 1000);
         wait_ms(100);
     }
-    for (int i=0; i<idLength; i++) {
-        dxl_bus.SetVelocityProfile(dxl_ID[i], 414); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
-        dxl_bus.SetAccelerationProfile(dxl_ID[i], 100); // 80(17166) rev/min^2
-    }
-    dxl_bus.SetMultGoalPositions(dxl_ID, idLength, multiHomePos); 
-    wait_ms(2000);
+    // for (int i=0; i<idLength; i++) {
+    //     dxl_bus.SetVelocityProfile(dxl_ID[i], 414); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
+    //     dxl_bus.SetAccelerationProfile(dxl_ID[i], 100); // 80(17166) rev/min^2
+    // }
+    // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, multiHomePos); 
+    wait_ms(1000);
     // On every received message, run dynamixel control loop...eventually move this to an interrupt on received message
     while (true) {
         // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos1);
@@ -157,6 +185,30 @@ int main() {
         wait_us(10);
         range_status[0] = tof1.readRangeStatus();
         **/
+        dxl_position = dxl_bus.GetPosition(dxl_ID[0]);
+        dxl_velocity = dxl_bus.GetVelocity(dxl_ID[0]);
+        dxl_current = dxl_bus.GetCurrent(dxl_ID[0]);
+        pc.printf("dxl velocity Term: %d\n\r",dxl_velocity);
+        // convert states
+        // currentPos = pulse_to_rad*(float)dxl_position;
+        // currentVel = rpm_to_rads*(float)dxl_velocity;
+        // currentCur = 0.001f*(float)dxl_current;
+
+        // currentPos = dxl_position;
+        // currentVel = dxl_velocity;
+        // currentCur = dxl_current;
+            
+        //desired_current = Kp*(goalPosC-currentPos) + Kd*(0.0f-currentVel) - Kj*currentVel;
+        desired_current = Kp*(goalPosC-(double)dxl_position) + Kd*(0.0f-(int32_t)dxl_velocity) - Kj*(int32_t)dxl_velocity;
+        desired_current = fmaxf(fminf(desired_current,current_limit),-current_limit);
+        //current_command = (int16_t)(desired_current*1000.0f);
+        current_command = (int16_t)desired_current;
+        pc.printf("Kp Term: %f\n\r",Kp*(goalPosC-dxl_position));
+        pc.printf("Kd Term: %f\n\r",Kd*(0.0f-(double)dxl_velocity));
+        pc.printf("Desired   Current: %f\n\r",desired_current);
+        pc.printf("Commanded Current: %d\n\r",current_command);
+        pc.printf("Current Position: %d\n\n\r",dxl_position);
+        dxl_bus.SetGoalCurrent(dxl_ID[0], current_command);
     }
 
 }

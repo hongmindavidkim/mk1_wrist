@@ -120,7 +120,7 @@ void XM430_bus::sendIPacket()
     //Send packet
     rtswitch = 1; // set switch output to "transmit"
     
-    wait_us(15); //from Adi
+    wait_us(20); //15 us from Adi
     
     for(int i = 0; i < iPacketLength; i++) sbus.putc(iPacket[i]);
 
@@ -137,7 +137,7 @@ void XM430_bus::getRPacket()
     float timeOut = return_delay + (12.0 * (float) ((float) rPacketLength) / ((float) baudrate)); //12 = 10 (start + 8 bits + stop) + 2 (gives a bit more time)
     //pc.printf("timeout: %f\n\r",timeOut);
     
-    wait_us(15); // same as delay in sendIPacket(); // Changed to 100us from 15us by David
+    wait_us(10); // same as delay in sendIPacket(); // Changed to 100us from 15us by David
     Timer tr;
     tr.start();
     while((i < rPacketLength)){ // && (tr.read() <= timeOut*2.0)) {
@@ -151,7 +151,7 @@ void XM430_bus::getRPacket()
     }
     tr.stop();
     //pc.printf("condition :%f\n\r",tr.read());
-    if (tr.read() >= timeOut) rPacket[8] = 0x80; //Creates an error code for the missed packet
+    if (tr.read() >= timeOut) rPacket[8] = 0x00;//0x80; //Creates an error code for the missed packet
 }
 
 /***** Generic functions *****/

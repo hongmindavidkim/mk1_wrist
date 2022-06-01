@@ -22,6 +22,8 @@ uint8_t state = 0; // Operating State
 #define LEN 100 
 #define wait_ms(x) wait_us(x*1000)
 #define rad2pulse_t(x) uint32_t(rad2pulse(x))
+#define deg2rad(x) float((PI/180.0f)*x)
+#define pulse2deg(x) (360.0f/4096.0f)*(float)(x-2048.0f)
 
 bool state_change = false;
 bool servo_on = false;
@@ -32,8 +34,13 @@ volatile uint8_t waitForReceive = 0;
 volatile uint8_t nextReload = 15;
 uint8_t rx_buffer[LEN];
 
+
 uint8_t dxl_ID[] =  {1, 2, 3, 4};
 uint8_t idLength = sizeof(dxl_ID) / sizeof(dxl_ID[0]);
+
+uint8_t dxl_ID_f2[] =  {5, 6, 7, 8};
+uint8_t idLength_f2 = sizeof(dxl_ID_f2) / sizeof(dxl_ID_f2[0]);
+
 
 // Debugging LEDs
 DigitalOut led_pwr(LED1);
@@ -45,10 +52,24 @@ RawSerial pc(USBTX, USBRX, 921600);
 Timer t;
 int loop_time;
 int servo_time;
-
+double dt = 0.002; //2ms
+uint32_t time_step = 0;
+Ticker motor_cmd;
+Ticker freq_change;
+int8_t motor_cmd_flag = 0;
+int32_t dxl_time;
 // Initial Positions
 
 uint32_t multiHomePos[4];
+uint32_t mouseGoalPos1[] = {2640, 2060, 1752, 2050};
+uint32_t mouseGoalPos2[] = {2245, 2146, 1690, 1972};
+uint32_t mouseGoalPos3[] = {2383, 2073, 1806, 2090};
+uint32_t mouseGoalPos4[] = {2425, 2198, 1790, 2154};
+
+uint32_t wheelPosStart[] = {2251, 2073, 1887, 2072};
+uint32_t wheelPosPull[] = {2459, 2260, 1886, 2086};
+uint32_t wheelPosPush[] = {2289, 2120, 1861, 2079};
+uint32_t rtPos_f1[4];
 uint16_t multiGoalCurrent[4];
 
 
@@ -69,7 +90,6 @@ float currentCur;
 
 double Kp[4] = {0.2, 0.15, 0.1, 0.3};
 double Kd[4] = {0.02, 0.02, 0.02, 0.02};
-
 
 float Kt = 2.0f * (3.7f / 2.7f);
 float pulse_to_rad = (2.0f*PI)/4096.0f; // = 0.001534
@@ -97,7 +117,6 @@ uint16_t current_command[4];
 // uint32_t* goalPos6 = ActuatorTransformation(0, -PI/4, 0, 0);
 // uint32_t* goalPos7 = ActuatorTransformation(PI/4, 0, 0, 0);
 // uint32_t* goalPos8 = ActuatorTransformation(-PI/4, 0, 0, 0);
-
 
 void display_options(void) {
     pc.printf("\n\r\n\r\n\r");
@@ -166,37 +185,140 @@ void serial_interrupt(void){
 
     }
 }
+XM430_bus dxl_bus(4000000, D1, D0, D2); // baud, tx, rx, rts
+float freq1 = 1; //9.5
+float freq2 = freq1/2.0f;
+float amp1 = (PI/180)*15;
+float amp2 = (PI/180)*15;
+float freq[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2};
+uint8_t idx_freq = 0;
+float c_freq_1 = 0;
+float c_freq_2 = 0;;
+uint8_t peak_time = 5;
+float max_freq = 5;
 
+void motorCommand() {
+motor_cmd_flag = 1;
+// if (dt*time_step < peak_time) {
+//     c_freq_1 = 0.5*(dt*time_step);
+//     c_freq_2 = 0.5*c_freq_1;
+// }
+// else if (dt*time_step >= 2*peak_time) {
+//     c_freq_1 = 0;
+//     c_freq_2 = 0;
+// }
+// else {
+//     c_freq_1 = float(peak_time) - 0.5*((dt*time_step)-peak_time);
+//     c_freq_2 = 0.5*c_freq_1;
+// }
 
+// c_freq_1 = 0.5*max_freq*(-cosf(PI*(1/(max_freq*2.0f))*dt*time_step)+1.0f);
+// c_freq_2 = c_freq_1 * 0.5f;
+
+// ActuatorTransformation(rtPos, 0.5*(PI/6)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f),  0.5*(PI/6)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f), 0.5*(PI/6)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f), 0.5*(PI/6)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f));
+ActuatorTransformation(rtPos_f1, 0.5*(amp1)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f), 0.5*(amp1)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f), 0.5*(amp1)*(-1*cosf(freq1*PI*(float)(dt*time_step))+1.0f), (amp2)*(sinf(freq2*PI*(float)(dt*time_step))));
+// ActuatorTransformation(rtPos_f1, 0.5*(amp1)*(-1*cosf(c_freq_1*PI*(float)(dt*time_step))+1.0f), 0.5*(amp1)*(-1*cosf(c_freq_1*PI*(float)(dt*time_step))+1.0f), 0.5*(amp1)*(-1*cosf(c_freq_1*PI*(float)(dt*time_step))+1.0f), (amp2)*(sinf(c_freq_2*PI*(float)(dt*time_step))));
+// ActuatorTransformation(rtPos, 0, 0, 0, 0);
+time_step++;
+}
+
+void cycleFreq() {
+    
+    *(&freq1) = freq[idx_freq];
+    *(&freq2) = freq1/2.0f;
+    if (idx_freq < (sizeof(freq)/sizeof(freq[0])-1)) {
+        idx_freq++;
+    }
+    else idx_freq = 0;
+}
+
+uint32_t multiGoalPos1[4], multiGoalPos2[4];
 // Main loop, receiving commands as fast as possible, then writing to a dynamixel
 int main() {
     //pc.attach(&serial_interrupt);
     ActuatorTransformation(multiHomePos, 0, 0, 0, 0);
     ActuatorTransformation(goalPos, 0, 0, 0, 0);
-
+    ActuatorTransformation(multiGoalPos1, deg2rad(10), deg2rad(10), deg2rad(10), deg2rad(10));
+    ActuatorTransformation(multiGoalPos2, deg2rad(10), deg2rad(10), deg2rad(10), deg2rad(-10));
     // ActuatorTransformation(tempPos1, 0, 0, 0, PI/4);
     // ActuatorTransformation(tempPos2, 0, 0, 0, -PI/4);
     
-    XM430_bus dxl_bus(4000000, D1, D0, D2); // baud, tx, rx, rts
-    wait_ms(1000);
-        for (int i=0; i<idLength; i++) {
-            dxl_bus.SetTorqueEn(dxl_ID[i],0x00);
-            dxl_bus.SetRetDelTime(dxl_ID[i],0x05); // 4us delay time?
-            dxl_bus.SetControlMode(dxl_ID[i], CURRENT_CONTROL);
-            wait_ms(100);
-            dxl_bus.TurnOnLED(dxl_ID[i], 0x01);
-            //dxl_bus.TurnOnLED(dxl_ID[i], 0x00); // turn off LED
-            dxl_bus.SetTorqueEn(dxl_ID[i],0x01); //to be able to move 
-            wait_ms(100);
+
+    for (int i=0; i<idLength; i++) {
+        dxl_bus.SetTorqueEn(dxl_ID[i],0x00);
+        dxl_bus.SetRetDelTime(dxl_ID[i],0x05); // 4us delay time?
+        dxl_bus.SetControlMode(dxl_ID[i], POSITION_CONTROL);
+        wait_ms(100);
+        dxl_bus.TurnOnLED(dxl_ID[i], 0x01);
+        //dxl_bus.TurnOnLED(dxl_ID[i], 0x00); // turn off LED
+        dxl_bus.SetTorqueEn(dxl_ID[i],0x01); //to be able to move 
+        wait_ms(100);
         }
-    // for (int i=0; i<idLength; i++) {
-    //     dxl_bus.SetVelocityProfile(dxl_ID[i], 414); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
-    //     dxl_bus.SetAccelerationProfile(dxl_ID[i], 100); // 80(17166) rev/min^2
-    // }
-    // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, multiHomePos); 
-    
+    for (int i=0; i<idLength; i++) {
+        dxl_bus.SetVelocityProfile(dxl_ID[i], 414); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
+        dxl_bus.SetAccelerationProfile(dxl_ID[i], 100); // 80(17166) rev/min^2
+        }
+
+    for (int i=0; i<idLength_f2; i++) {
+        dxl_bus.SetTorqueEn(dxl_ID_f2[i],0x00);
+        dxl_bus.SetRetDelTime(dxl_ID_f2[i],0x05); // 4us delay time?
+        dxl_bus.SetControlMode(dxl_ID_f2[i], POSITION_CONTROL);
+        wait_ms(100);
+        dxl_bus.TurnOnLED(dxl_ID_f2[i], 0x01);
+        //dxl_bus.TurnOnLED(dxl_ID[i], 0x00); // turn off LED
+        dxl_bus.SetTorqueEn(dxl_ID_f2[i],0x01); //to be able to move 
+        wait_ms(100);
+        }
+    for (int i=0; i<idLength_f2; i++) {
+        dxl_bus.SetVelocityProfile(dxl_ID_f2[i], 414); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
+        dxl_bus.SetAccelerationProfile(dxl_ID_f2[i], 100); // 80(17166) rev/min^2
+        }
+
+    dxl_bus.SetMultGoalPositions(dxl_ID, idLength, multiHomePos);
+    dxl_bus.SetMultGoalPositions(dxl_ID_f2, idLength_f2, multiHomePos);
+    wait_ms(1000);
+
+    for (int i=0; i<idLength; i++) {
+        dxl_bus.SetVelocityProfile(dxl_ID[i], 0); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
+        dxl_bus.SetAccelerationProfile(dxl_ID[i], 0); // 80(17166) rev/min^2
+        }
+
+    for (int i=0; i<idLength_f2; i++) {
+        dxl_bus.SetVelocityProfile(dxl_ID_f2[i], 0); // 414(94.81RPM) @ 14.8V, 330(75.57RPM) @ 12V
+        dxl_bus.SetAccelerationProfile(dxl_ID_f2[i], 0); // 80(17166) rev/min^2
+        }
+        
     // On every received message, run dynamixel control loop...eventually move this to an interrupt on received message
+    motor_cmd.attach_us(&motorCommand,2000);
+    freq_change.attach_us(&cycleFreq,4000000);
+    
+    
     while (true) {
+    t.reset();
+    t.start();
+        if (motor_cmd_flag){
+            motor_cmd_flag = 0;
+        dxl_bus.SetMultGoalPositions(dxl_ID, idLength, rtPos_f1);
+        dxl_bus.SetMultGoalPositions(dxl_ID_f2, idLength_f2, rtPos_f1);
+        // dxl_bus.GetMultVelocities(dxl_velocity, dxl_ID, idLength);
+        dxl_bus.GetMultCurrents(dxl_current, dxl_ID, idLength);
+        // dxl_bus.GetMultPositions(dxl_position, dxl_ID, idLength);
+        // dxl_bus.GetMultPositions(dxl_position, dxl_ID, idLength);
+        }
+        
+        // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, rtPos);
+  
+        // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, mouseGoalPos1);
+        // dxl_bus.GetMultPositions(dxl_position, dxl_ID, idLength);
+        // pc.printf("MCP: %d, MCR: %d, PIP: %d, DIP: %d\n\r", dxl_position[3], dxl_position[0], dxl_position[1], dxl_position[2]);
+        // wait_ms(800);
+        // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, mouseGoalPos2);
+        // wait_ms(1000);
+        // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, mouseGoalPos3);
+        // wait_ms(200);
+        // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, mouseGoalPos4);
+        // wait_ms(800);
+
         // dxl_bus.SetMultGoalPositions(dxl_ID, idLength, goalPos1);
         // pc.printf("%d, %d, %d, %d\n\r", goalPos1[0], goalPos1[1], goalPos1[2], goalPos1[3]);
         // wait_ms(500);
@@ -238,9 +360,9 @@ int main() {
         // dxl_current = dxl_bus.GetCurrent(dxl_ID[0]);
         // t.reset();
         // t.start();
-        dxl_bus.GetMultPositions(dxl_position, dxl_ID, idLength);
-        dxl_bus.GetMultVelocities(dxl_velocity, dxl_ID, idLength);
-        dxl_bus.GetMultCurrents(dxl_current, dxl_ID, idLength);
+        // dxl_bus.GetMultPositions(dxl_position, dxl_ID, idLength);
+        // dxl_bus.GetMultVelocities(dxl_velocity, dxl_ID, idLength);
+        // dxl_bus.GetMultCurrents(dxl_current, dxl_ID, idLength);
 
         //pc.printf("dxl velocity Term: %d\n\r",dxl_velocity);
         // convert states
@@ -252,22 +374,26 @@ int main() {
         // currentVel = dxl_velocity;
         // currentCur = dxl_current;
             
-        for(int i = 0;i<idLength;i++){
-        desired_current[i] = Kp[i]*((double)goalPos[i]-(double)dxl_position[i]) + Kd[i]*(0.0f-(int32_t)dxl_velocity[i]);
-        desired_current[i] = fmaxf(fminf(desired_current[i],current_limit),-current_limit);
-        current_command[i] = (int16_t)desired_current[i];
-        }
+        // for(int i = 0;i<idLength;i++){
+        // desired_current[i] = Kp[i]*((double)goalPos[i]-(double)dxl_position[i]) + Kd[i]*(0.0f-(int32_t)dxl_velocity[i]);
+        // desired_current[i] = fmaxf(fminf(desired_current[i],current_limit),-current_limit);
+        // current_command[i] = (int16_t)desired_current[i];
+        // }
 
         //current_command = (int16_t)(desired_current*1000.0f);
         
         //pc.printf("Kp Term: %f\n\r",Kp*(goalPosC-dxl_position));
         // pc.printf("Kd Term: %f\n\r",Kd*(0.0f-(double)dxl_velocity));
         // pc.printf("Desired   Current: %f\n\r",desired_current);
-        pc.printf("Commanded Current: %d\n\r",current_command[3]);
+        // pc.printf("Commanded Current: %d\n\r",current_command[3]);
         // pc.printf("Current Position: %d\n\n\r",dxl_position);
-        dxl_bus.SetMultGoalCurrents(dxl_ID, idLength, current_command);
+        // dxl_bus.SetMultGoalCurrents(dxl_ID, idLength, current_command);
         // servo_time = t.read_us();
         //pc.printf("%d\n\r",servo_time);
+        dxl_time = t.read_us();
+        // pc.printf("loop time: %d\n\r", dxl_time);
+        // pc.printf("Velocity M1: %d, Velocity M2: %d, Velocity M3: %d, Velocity M4: %d\n\r", dxl_velocity[0], dxl_velocity[1], dxl_velocity[2], dxl_velocity[3]);
+        pc.printf("Current M1: %d, Current M2: %d, Current M3: %d, Current M4: %d\n\r", dxl_current[0], dxl_current[1], dxl_current[2], dxl_current[3]);
     }
 
 }

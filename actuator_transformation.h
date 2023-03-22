@@ -16,3 +16,4 @@
 #define PULLEY_DEPENDENCY_32 -1*(548.0f/1388.0f)
 
 void ActuatorTransformation(uint32_t (&transform)[4], float mcp, float pip, float dip, float mcr);
+void PitchYawTransformation(uint32_t (&transform)[2], float pitch, float yaw);

@@ -31,3 +31,21 @@ void ActuatorTransformation(uint32_t (&transform)[4], float mcp, float pip, floa
     //free(d_transform);
     //static uint32_t transform[4] = {(uint32_t)round(d_transform[0]), (uint32_t)round(d_transform[1]), (uint32_t)round(d_transform[2]), (uint32_t)round(d_transform[3])};
 }
+
+void PitchYawTransformation(uint32_t (&transform)[2], float pitch, float yaw) { 
+    double d_transform[2];
+    
+    //pitch
+    d_transform[0] = 2048 - radconv(pitch);
+    d_transform[1] = 2048 + radconv(pitch);
+    
+    //yaw
+    d_transform[0] += radconv(yaw);
+    d_transform[1] += radconv(yaw);
+    
+    transform[0] = (uint32_t)round(d_transform[0]);
+    transform[1] = (uint32_t)round(d_transform[1]);
+ 
+    //free(d_transform);
+    //static uint32_t transform[4] = {(uint32_t)round(d_transform[0]), (uint32_t)round(d_transform[1]), (uint32_t)round(d_transform[2]), (uint32_t)round(d_transform[3])};
+}
